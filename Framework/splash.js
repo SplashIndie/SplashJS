@@ -1,6 +1,7 @@
 class Game {
     constructor() {
         this.zoom = 3;
+        this.vignete = 0;
         this.camera = [0, 0];
         this.renderer = [];
         this.colliders = {
@@ -10,7 +11,14 @@ class Game {
         this.world = {
             gravity: 0.7
         }
-        this.keys = '';
+        this.events = '';
+
+
+        this.performance = {
+            fps: 0,
+            frames: 0,
+            lastTime: performance.now()
+        };
 
 
         this.canvas = document.querySelector('canvas');
@@ -19,6 +27,7 @@ class Game {
 
         this.canvas.width = innerWidth;
         this.canvas.height = innerHeight;
+
 
         this.canvas.style.background = '#000';
         this.canvas.style.position = 'absolute';
@@ -33,29 +42,58 @@ class Game {
 
 
 
+        onresize = () => {
+            this.canvas.width = innerWidth;
+            this.canvas.height = innerHeight;
+            this.ctx.mozImageSmoothingEnabled = 0;
+            this.ctx.webkitImageSmoothingEnabled = 0;
+            this.ctx.msImageSmoothingEnabled = 0;
+            this.ctx.imageSmoothingEnabled = 0;
+        };
+
+
+
 
 
 
         addEventListener('keydown', (e) => {
-            if (!this.keys.includes(e.key + ',')) {
-                this.keys += e.key + ","
+            if (!this.events.includes(e.key + ',')) {
+                this.events += e.key + ","
             }
         });
         addEventListener('keyup', (e) => {
-            if (this.keys.includes(e.key + ',')) {
-                this.keys = this.keys.replace(e.key + ',', "");
+            if (this.events.includes(e.key + ',')) {
+                this.events = this.events.replace(e.key + ',', "");
             }
         });
+
+
     }
-    isPressed(key) {
-        return this.keys.includes(key + ',');
+    isPressed(eventID) {
+        return this.events.includes(eventID.replaceAll(',', '') + ',');
+    }
+    sendEvent(eventID) {
+        this.events += eventID.replaceAll(',') + ",";
+    }
+    stopEvent(eventID) {
+        this.events = this.events.replace(eventID + ',', "");
+    }
+    addEventTouched(eventID, element) {
+        element.ontouchstart = (e) => {
+            this.sendEvent(eventID);
+        }
+        element.ontouchstart = (e) => {
+            this.stopEvent(eventID);
+        }
     }
     add(object) {
         this.renderer.push(object);
-        if (object.physics.type == 'rigid' || object.physics.type == 'dynamic') {
-            this.colliders['dynamic_rigid'].push(object);
-        } else {
-            this.colliders[object.physics.type].push(object);
+        if (object.physics.type !== 'null') {
+            if (object.physics.type == 'rigid' || object.physics.type == 'dynamic') {
+                this.colliders['dynamic_rigid'].push(object);
+            } else {
+                this.colliders[object.physics.type].push(object);
+            }
         }
         return object;
     }
@@ -105,9 +143,22 @@ class Game {
         }
 
         for (let i of this.renderer) {
+            i.enable = (((i.position[0] * this.zoom) - this.camera[0]) + ((i.size[0] * this.zoom) * 2) > 0 && ((i.position[0] * this.zoom) - this.camera[0]) + (i.size[0] * this.zoom) < innerWidth + ((i.size[0] * this.zoom) * 2) && ((i.position[1] * this.zoom) - this.camera[1]) + ((i.size[1] * this.zoom) * 2) > 0 && ((i.position[1] * this.zoom) - this.camera[1]) + (i.size[1] * this.zoom) < innerHeight + ((i.size[1] * this.zoom) * 2));
+        }
+
+        for (let i of this.renderer) {
             if (!i.enable) continue;
             if (i.constructor.name == 'Sprite') {
                 this.ctx.save();
+                // this.ctx.drawImage(
+                //     i.image, i.imageConfig.cropPosition[0], i.imageConfig.cropPosition[1], i.imageConfig.cropSize[0], i.imageConfig.cropSize[1],
+                //     (i.position[0] * this.zoom) - this.camera[0], (i.position[1] * this.zoom) - this.camera[1], i.size[0] * this.zoom, i.size[1] * this.zoom
+                // );
+
+                this.ctx.translate(((i.position[0] * this.zoom) - this.camera[0]) + ((i.size[0] * this.zoom) / 2), ((i.position[1] * this.zoom) - this.camera[1]) + ((i.size[1] * this.zoom) / 2));
+                this.ctx.rotate(i.angle * Math.PI / 180);
+                this.ctx.translate(-(((i.position[0] * this.zoom) - this.camera[0]) + ((i.size[0] * this.zoom) / 2)), -(((i.position[1] * this.zoom) - this.camera[1]) + ((i.size[1] * this.zoom) / 2)));
+
                 this.ctx.drawImage(
                     i.image, i.imageConfig.cropPosition[0], i.imageConfig.cropPosition[1], i.imageConfig.cropSize[0], i.imageConfig.cropSize[1],
                     (i.position[0] * this.zoom) - this.camera[0], (i.position[1] * this.zoom) - this.camera[1], i.size[0] * this.zoom, i.size[1] * this.zoom
@@ -115,6 +166,32 @@ class Game {
                 this.ctx.restore();
             }
         }
+        this.ctx.save();
+        // Create a radial gradient from black to transparent
+        const gradient = this.ctx.createRadialGradient(innerWidth / 2, innerHeight / 2, 0, innerWidth / 2, innerHeight / 2, this.vignete);
+        gradient.addColorStop(0, "rgba(0,0,0,0)");
+        gradient.addColorStop(1, "rgba(0,0,0,1)");
+
+        // Set the blending mode to multiply
+        this.ctx.globalCompositeOperation = "multiply";
+
+        // Draw the vignette using the radial gradient
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+        // Restore the context state
+        this.ctx.restore();
+
+
+        this.performance.frames++;
+        const currentTime = performance.now();
+        if (currentTime - this.performance.lastTime >= 1000) {
+            this.performance.fps = this.performance.frames;
+            this.performance.frames = 0;
+            this.performance.lastTime = currentTime;
+        }
+
+
         requestAnimationFrame(func);
     }
 
@@ -122,11 +199,27 @@ class Game {
         this.camera[0] += Math.floor(((object.position[0] * this.zoom) - this.camera[0] - (this.canvas.width / 2) + Math.floor((object.size[0] * this.zoom)) / 2) / delay);
         this.camera[1] += Math.floor(((object.position[1] * this.zoom) - this.camera[1] - (this.canvas.height / 2) + Math.floor((object.size[1] * this.zoom)) / 2) / delay);
     }
+
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1) + min);
+    }
+
+    getDistance(objectA, objectB) {
+        const dx = objectA.x - objectB.x;
+        const dy = objectA.y - objectB.y;
+        return Math.sqrt(dx * dx - dy * dy);
+    }
 }
 
-/* 
-[Game].startScene([Scene],(Reniciar [Boolean]));
-*/
+function getImageSize(url) {
+    let img = new Image();
+    img.src = url;
+
+    return { width: img.width, height: img.height };
+}
+
 
 
 
@@ -136,10 +229,13 @@ class Sprite {
     constructor(sprite, x, y, width, height, collider = 'dynamic') {
         this.position = [x, y];
         this.size = [width, height];
+        this.angle = 0;
         this.physics = {
             type: collider,
             velocity: 0
         }
+        this.x = x;
+        this.y = y;
 
 
         this.sprite = sprite;
@@ -164,20 +260,39 @@ class Sprite {
 
         this.enable = true;
     }
+
+    lookAt(object) {
+        let dx = (object.position[0] + (object.size[0] / 2)) - (this.position[0] + (this.size[0] / 2));
+        let dy = (object.position[1] + (object.size[1] / 2)) - (this.position[1] + (this.size[1] / 2));
+
+        this.angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    }
+    move(speed) {
+        let angleRad = this.angle * Math.PI / 180;
+
+        this.moveX(Math.cos(angleRad) * speed);
+        this.moveY(Math.sin(angleRad) * speed);
+    }
+
+
     moveX(value) {
         this.position[0] += value;
+        this.x = this.position[0];
     }
     moveY(value) {
         this.position[1] += value;
+        this.y = this.position[1];
     }
 
 
 
     setX(value) {
         this.position[0] = value;
+        this.x = this.position[0];
     }
     setY(value) {
         this.position[1] = value;
+        this.y = this.position[1];
     }
 
 
@@ -186,14 +301,14 @@ class Sprite {
         position[0] = Math.min(position[0], columns - 1);
         position[1] = Math.min(position[1], rows - 1);
 
-        let posX = position[0] * (this.imageConfig.size[0] / columns);
-        let posY = position[1] * (this.imageConfig.size[1] / rows);
+        let posX = Math.round(position[0] * (this.imageConfig.size[0] / columns));
+        let posY = Math.round(position[1] * (this.imageConfig.size[1] / rows));
 
 
 
 
         this.imageConfig.cropPosition = [posX, posY];
-        this.imageConfig.cropSize = [(this.imageConfig.size[0] / columns), (this.imageConfig.size[1] / rows)];
+        this.imageConfig.cropSize = [Math.round(this.imageConfig.size[0] / columns), Math.round(this.imageConfig.size[1] / rows)];
 
         this.imageConfig.rows = rows;
         this.imageConfig.columns = columns;
@@ -220,6 +335,17 @@ class Sprite {
         }
     }
 
+    followObject(object, speed, minDistance = 0) {
+        const dx = this.x - object.x;
+        const dy = this.y - object.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > minDistance) {
+            this.moveX(-(dx / distance * speed));
+            this.moveY(-(dy / distance * speed));
+        }
+    }
+
 
 
 
@@ -229,5 +355,98 @@ class Sprite {
             .then(response => response.text())
             .then(data => eval(data))
             .catch(error => console.error(error));
+    }
+}
+
+class Box {
+    constructor(x, y, width, height, collider = 'dynamic') {
+        this.position = [x, y];
+        this.size = [width, height];
+        this.physics = {
+            type: collider,
+            velocity: 0
+        }
+        this.x = x;
+        this.y = y;
+
+
+        this.enable = true;
+    }
+
+
+    moveX(value) {
+        this.position[0] += value;
+        this.x = this.position[0];
+    }
+    moveY(value) {
+        this.position[1] += value;
+        this.y = this.position[1];
+    }
+
+
+
+    setX(value) {
+        this.position[0] = value;
+        this.x = this.position[0];
+    }
+    setY(value) {
+        this.position[1] = value;
+        this.y = this.position[1];
+    }
+
+    followObject(object, speed, minDistance) {
+        const dx = this.x - object.x;
+        const dy = this.y - object.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > minDistance) {
+            this.moveX(-(dx / distance * speed));
+            this.moveY(-(dy / distance * speed));
+        }
+    }
+
+
+
+
+
+    importScript(url = '') {
+        fetch(url)
+            .then(response => response.text())
+            .then(data => eval(data))
+            .catch(error => console.error(error));
+    }
+}
+
+
+// GUI Objects
+
+class uiImage {
+    constructor(image, x, y, size = [0, 0], name = 'uiImage') {
+        this.image = (image == null) ? '#fff' : image;
+
+
+        this.x = x;
+        this.y = y;
+        this.width = size[0];
+        this.height = size[1];
+
+
+        this.element = document.createElement('div');
+        document.body.appendChild(this.element);
+        this.element.id = name;
+
+
+        this.element.style.background = (image == null) ? this.image : 'url(' + this.image + ')';
+        this.element.style.backgroundPosition = 'center';
+        this.element.style.backgroundSize = 'cover';
+        this.element.style.backgroundRepeat = 'no-repeat';
+        this.element.style.imageRendering = 'pixelated';
+
+        this.element.style.position = 'absolute';
+
+        this.element.style.top = this.y + 'px';
+        this.element.style.left = this.x + 'px';
+        this.element.style.width = this.width + 'px';
+        this.element.style.height = this.height + 'px';
     }
 }
